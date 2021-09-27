@@ -19,6 +19,7 @@ class SSSPEngineRTL( Component ):
     data_mem_size = num_entries * num_entries
     ResType = mk_bits( clog2( data_mem_size ) )
     NodeType = mk_bits( clog2( num_entries ) )
+    TempNodeType = mk_bits( clog2( num_entries + 1 ) )
     
     # OutputDataType   = mk_bits( clog2( num_entries ) )
 
@@ -31,9 +32,12 @@ class SSSPEngineRTL( Component ):
     s.queue = NormalQueueRTL( NodeType, num_entries * num_entries )
     s.step = Wire( ResType )
     s.iter = Wire( NodeType )
+    s.temp_iter = Wire( TempNodeType )
     s.curCount = Wire( ResType )
     s.dst  = Wire( NodeType )
     s.node = Wire( NodeType )
+    s.cur_done = Wire( b1 )
+    s.start_run = Wire( b1 )
 
     @s.update
     def init_process():
@@ -49,18 +53,43 @@ class SSSPEngineRTL( Component ):
 
       if s.queue.count > 0:
         s.node = s.queue.deq.ret
-        if s.iter < s.num_entries:
-          if s.mem[s.node][s.iter] == b1( 1 ):
-            s.queue.enq.msg = s.iter
-            s.queue.enq.en = b1( 1 )
-            if s.iter == s.dst:
-              s.send.msg = s.step
-              s.send.en  = b1( 1 )
+        s.cur_done = b1( 0 )
+        s.start_run = b1( 1 )
+        for i in range(s.iter, s.num_entries):
+          if not s.cur_done:
+            if s.mem[s.node][i] == b1( 1 ):
+              s.queue.enq.msg = NodeType(i)
+              s.queue.enq.en = b1( 1 )
+              s.cur_done = b1( 1 )
+              s.temp_iter = TempNodeType( i + 1 )
+              if s.temp_iter == s.dst + 1:
+                s.send.msg = s.step
+                s.send.en  = b1( 1 )
 
-          if s.iter == s.num_entries - 1:
+          if not s.cur_done or s.iter == s.num_entries - 1:
             s.queue.deq.en = b1( 1 )
+            s.temp_iter = TempNodeType( 0 )
           else:
             s.queue.deq.en = b1( 0 )
+
+
+
+#        if s.iter < s.num_entries:
+#          if s.mem[s.node][s.iter] == b1( 1 ):
+#            s.queue.enq.msg = s.iter
+#            s.queue.enq.en = b1( 1 )
+#            if s.iter == s.dst:
+#              s.send.msg = s.step
+#              s.send.en  = b1( 1 )
+#
+#          if s.iter == s.num_entries - 1:
+#            s.queue.deq.en = b1( 1 )
+#          else:
+#            s.queue.deq.en = b1( 0 )
+      elif s.start_run:
+        s.send.msg = ResType( 0 )
+        s.send.en  = b1( 1 )
+        s.start_run = b1( 0 )
 
     @s.update_ff
     def bfs_process():
@@ -72,18 +101,26 @@ class SSSPEngineRTL( Component ):
       # Update register file that represents the adjacent matrix.
       if s.recv.msg.init == b1( 1 ):
         s.mem[s.recv.msg.src][s.recv.msg.dst] <<= b1( 1 )
-      s.mem[s.node][s.iter] <<= b1( 0 )
+      if s.cur_done:
+        s.mem[s.node][s.temp_iter-1] <<= b1( 0 )
 
       if s.queue.count > 0:
+
         if s.curCount == 0:
           s.curCount <<= ResType( s.queue.count )
           s.step <<= s.step + 1
 
-        if s.iter < s.num_entries - 1:
-          s.iter <<= s.iter + 1
-        else:
+        if not s.cur_done or s.temp_iter >= s.num_entries:
           s.iter <<= NodeType( 0 )
           s.curCount <<= s.curCount - 1
+        else:
+          s.iter <<= s.temp_iter
+
+#        if s.iter < s.num_entries - 1:
+#          s.iter <<= s.iter + 1
+#        else:
+#          s.iter <<= NodeType( 0 )
+#          s.curCount <<= s.curCount - 1
 
   def line_trace( s ):
     str_line = "\n"
