@@ -16,6 +16,7 @@ from pymtl3.stdlib.test.test_sinks import TestSinkRTL, TestSinkCL
 from pymtl3.stdlib.test            import TestVectorSimulator
 from lib.messages                  import *
 from ..SSSPEngineRTL               import SSSPEngineRTL
+from pymtl3.passes.backends.verilog import TranslationImportPass
 
 #-------------------------------------------------------------------------
 # TestHarness
@@ -47,8 +48,11 @@ class TestHarness( Component ):
 
 def run_sim( test_harness, max_cycles=100 ):
 
-  # Create a simulator
+  # Create a simulator with translation
   test_harness.elaborate()
+  test_harness.dut.verilog_translate_import = True
+  test_harness.dut.config_verilog_import = VerilatorImportConfigs(vl_Wno_list             =         ['UNSIGNED', 'UNOPTFLAT', 'WIDTH', 'WIDTHCONCAT', 'ALWCOMBORDER'])
+  test_harness = TranslationImportPass()(test_harness)
   test_harness.apply( SimulationPass() )
   test_harness.sim_reset()
 
@@ -75,9 +79,9 @@ InputDataType  = mk_data( num_entries, 1, 1 )
 OutputDataType = mk_bits( clog2( num_entries * num_entries ) )
 test_msgs = [ InputDataType(0,1,1,0), InputDataType(1,2,1,0), InputDataType(1,3,1,0),
               InputDataType(2,3,1,0), InputDataType(2,1,1,0), InputDataType(3,1,1,0),
-              InputDataType(3,4,1,0), InputDataType(4,0,1,0), InputDataType(4,1,1,0),
+              InputDataType(3,4,1,0), InputDataType(4,5,1,0), InputDataType(4,1,1,0),
               InputDataType(0,5,0,1) ]
-sink_msgs = [ OutputDataType(0) ]
+sink_msgs = [ OutputDataType(4) ]
 
 def test_simple():
   th = TestHarness( InputDataType, OutputDataType, num_entries,
