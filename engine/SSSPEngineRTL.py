@@ -38,45 +38,48 @@ class SSSPEngineRTL( Component ):
     s.node      = Wire( NodeType )
     s.cur_done  = Wire( b1 )
     s.start_run = Wire( b1 )
+    s.terminate = Wire( b1 )
 
     @s.update
     def init_process():
       s.recv.rdy     = b1( 1 )
-      s.send.en      = b1( 0 )
       s.queue.enq.en = b1( 0 )
+      s.terminate    = b1( 0 )
+      s.send.en      = b1( 0 )
 
       # Perform the SSSP search.
       if s.recv.msg.run == b1( 1 ):
         s.queue.enq.msg = s.recv.msg.src
         s.queue.enq.en  = b1( 1 )
         s.dst           = s.recv.msg.dst
+        s.terminate     = b1( 0 )
 
       if s.queue.count > ResType( 0 ):
         s.node      = s.queue.deq.ret
         s.cur_done  = b1( 0 )
-        s.start_run = b1( 1 )
         # The start of a for-loop must be a constant expression!
         # for i in range(s.iter, s.num_entries):
-        for i in range( s.num_entries ):
+        s.temp_iter = TempNodeType( 0 )
+        for i in range( s.num_entries-1, -1, -1 ):
           if NodeType( i ) >= s.iter:
-            if not s.cur_done:
-              if s.mem[s.node][i] == b1( 1 ):
-                s.queue.enq.msg = NodeType(i)
-                s.queue.enq.en  = b1( 1 )
-                s.cur_done      = b1( 1 )
-                s.temp_iter     = TempNodeType( i + 1 )
-                if s.temp_iter == s.dst + TempNodeType( 1 ):
-                  s.send.msg   = s.step
-                  s.send.en    = b1( 1 )
+            #if not s.cur_done:
+            if s.mem[s.node][i] == b1( 1 ):
+              s.queue.enq.msg = NodeType(i)
+              s.queue.enq.en  = b1( 1 )
+              s.cur_done      = b1( 1 )
+              s.temp_iter     = TempNodeType( i + 1 )
+              if s.start_run and s.temp_iter == s.dst + TempNodeType( 1 ):
+                s.send.msg   = s.step
+                s.send.en    = b1( 1 )
+                s.terminate  = b1( 1 )
+      if s.iter == NodeType( s.num_entries - 1 ):
+        s.temp_iter = TempNodeType( 0 )
+      if s.start_run and s.step > ResType(0) and s.queue.count == ResType( 0 ):
+        s.send.msg = ResType( 0 )
+        s.send.en  = b1( 1 )
   
-            if not s.cur_done or s.iter == NodeType( s.num_entries - 1 ):
-              s.queue.deq.en = b1( 1 )
-              s.temp_iter    = TempNodeType( 0 )
-            else:
-              s.queue.deq.en = b1( 0 )
-
 ##########################################################################
-# Sequential version for the BFS. It takes one cycle to check a connection
+# (FSM) Sequential version for the BFS. It takes one cycle to check a connection
 # exists or not. 
 ##########################################################################
 #        if s.iter < s.num_entries:
@@ -91,10 +94,23 @@ class SSSPEngineRTL( Component ):
 #            s.queue.deq.en = b1( 1 )
 #          else:
 #            s.queue.deq.en = b1( 0 )
-      elif s.start_run:
-        s.send.msg  = ResType( 0 )
-        s.send.en   = b1( 1 )
-        s.start_run = b1( 0 )
+
+    @s.update_ff
+    def finish_process():
+      s.start_run <<= b1( 1 )
+
+      if s.terminate or (s.step > ResType(0) and s.queue.count == ResType( 0 )):
+        s.start_run <<= b1( 0 )
+
+    @s.update
+    def check_process():
+
+      if not s.cur_done or s.iter == NodeType( s.num_entries - 1 ):
+        s.queue.deq.en = b1( 1 )
+        #s.temp_iter    = TempNodeType( 0 )
+      else:
+        s.queue.deq.en = b1( 0 )
+
 
     @s.update_ff
     def bfs_process():
@@ -122,7 +138,7 @@ class SSSPEngineRTL( Component ):
           s.iter      <<= s.temp_iter
 
 ##########################################################################
-# Sequential version for the BFS. It takes one cycle to check a connection
+# (FSM) Sequential version for the BFS. It takes one cycle to check a connection
 # exists or not. 
 ##########################################################################
 #        if s.iter < s.num_entries - 1:

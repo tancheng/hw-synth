@@ -50,9 +50,9 @@ def run_sim( test_harness, max_cycles=100 ):
 
   # Create a simulator with translation
   test_harness.elaborate()
-  test_harness.dut.verilog_translate_import = True
-  test_harness.dut.config_verilog_import = VerilatorImportConfigs(vl_Wno_list             =         ['UNSIGNED', 'UNOPTFLAT', 'WIDTH', 'WIDTHCONCAT', 'ALWCOMBORDER'])
-  test_harness = TranslationImportPass()(test_harness)
+#  test_harness.dut.verilog_translate_import = True
+#  test_harness.dut.config_verilog_import = VerilatorImportConfigs(vl_Wno_list             =         ['UNSIGNED', 'UNOPTFLAT', 'WIDTH', 'WIDTHCONCAT', 'ALWCOMBORDER'])
+#  test_harness = TranslationImportPass()(test_harness)
   test_harness.apply( SimulationPass() )
   test_harness.sim_reset()
 
